@@ -1,0 +1,11 @@
+*.log
+bin/results/
+bin/results1/
+bin/results2/
+bin/results3/
+bin/results4/
+test_sample_1/
+data/
+data-source/
+premodel/
+results
