@@ -26,6 +26,7 @@ def p_sample(
     model: nn.Module,
     x: torch.Tensor,
     coords:torch.Tensor,
+    acid_embedding: torch.Tensor,
     t: torch.Tensor,
     seq_lens: Sequence[int],
     t_index: torch.Tensor,
@@ -63,7 +64,7 @@ def p_sample(
     model_mean = sqrt_recip_alphas_t * (
         x
         - betas_t
-        * model(x,coords, t, attention_mask=attn_mask)
+        * model(x,coords, acid_embedding, t, attention_mask=attn_mask)
         / sqrt_one_minus_alphas_cumprod_t
     )
 
@@ -80,6 +81,7 @@ def p_sample(
 def p_sample_loop(
     model: nn.Module,
     coords:torch.Tensor,
+    acid_embedding: torch.Tensor,
     lengths: Sequence[int],
     noise: torch.Tensor,
     timesteps: int,
@@ -109,6 +111,7 @@ def p_sample_loop(
             model=model,
             x=img,
             coords =coords,
+            acid_embedding = acid_embedding,
             t=torch.full((b,), i, device=device, dtype=torch.long),  # time vector
             seq_lens=lengths,
             t_index=i,
@@ -172,6 +175,7 @@ def sample(
     logging.info(f"Sampling {len(lengths)} items in batches of size {batch_size}")
     retval = []
     temp_c = train_dset[0]["coords"]
+    temp_e = train_dset[0]["acid_embedding"]
    # coords = temp_c.repeat(512,1,1,1).cuda()
    # print("=================train_dset.[0][coords]=================",train_dset[0]["coords"].shape)
   #  print("=================coords=================",coords.shape)
@@ -179,6 +183,7 @@ def sample(
         batch = len(this_lengths)
         # Sample noise and sample the lengths
         coords = temp_c.repeat(batch,1,1,1).cuda()
+        acid_embedding = temp_e.repeat(batch,1,1,1).cuda()
         noise = train_dset.sample_noise(
             torch.zeros((batch, train_dset.pad, model.n_inputs), dtype=torch.float32)
         )
@@ -186,6 +191,7 @@ def sample(
         sampled = p_sample_loop(
             model=model,
             coords = coords,
+            acid_embedding = acid_embedding,
             lengths=this_lengths,
             noise=noise,
             timesteps=train_dset.timesteps,

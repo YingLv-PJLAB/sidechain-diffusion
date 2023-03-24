@@ -9,3 +9,9 @@ data/
 data-source/
 premodel/
 results
+*.pyc
+*.pkl
+plots/
+mini_model_for_testing/
+
+

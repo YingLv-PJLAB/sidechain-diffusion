@@ -22,7 +22,7 @@ import torch
 from torch import nn
 from torch.utils.data import Dataset
 from PDB_processing import get_torsion_seq
-from ESM1b_embedding import dict_structure_pdb
+from ESM1b_embedding import add_esm1b_embedding
 
 LOCAL_DATA_DIR = Path(
     os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "data")
@@ -541,6 +541,7 @@ class CathSideChainAnglesDataset(Dataset):
             logging.info(f"Loading toy dataset of {toy} structures")
             self.structures = self.__compute_featurization_sidechain(fnames)
         elif use_cache and os.path.exists(self.cache_fname):
+            print("=====================self.cache_fname=========",self.cache_fname)
             logging.info(f"Loading cached full dataset from {self.cache_fname}")
             with open(self.cache_fname, "rb") as source:
                 loaded_hash, loaded_structures = pickle.load(source)
@@ -695,9 +696,10 @@ class CathSideChainAnglesDataset(Dataset):
        #     structures.append(dict_structure_pdb(names))
         structures = []
         pool = multiprocessing.Pool(processes=multiprocessing.cpu_count())
-        structures = list(pool.map(dict_structure_pdb,fnames, chunksize=250))
+        structures = list(pool.map(get_torsion_seq,fnames, chunksize=250))
         pool.close()
         pool.join()
+        structures = add_esm1b_embedding(structures,128)
       #  with open("/mnt/petrelfs/lvying/code/sidechain-diffusion/foldingdiff/wrong_file") as f:
       #      worng_pdb = f.readlines()
            # print(worng_pdb)       
@@ -790,8 +792,8 @@ class CathSideChainAnglesDataset(Dataset):
         # NOTE coords are NOT shifted or wrapped, has same length as angles
         coords = self.structures[index]["coords"]
         seq = self.structures[index]["seq"]
-      #  acid_embedding = self.structures[index]["acid_embedding"]
-        
+        acid_embedding = self.structures[index]["acid_embedding"]
+        chi_mask = self.structures[index]["chi_mask"]
        # print("&&&&&&&&&&&&&&&&&&&&&&&&angles&&&&&&&&&&&&&&&&&&",angles.shape)
        # print("&&&&&&&&&&&&&&&&&&&&&&&&coords&&&&&&&&&&&&&&&&&&",coords.shape)
        # print("&&&&&&&&&&&&&&&&&&&&&&&&seq&&&&&&&&&&&&&&&&&&",seq.shape)
@@ -852,12 +854,18 @@ class CathSideChainAnglesDataset(Dataset):
                 mode="constant",
                 constant_values=0,
             )
-        #    acid_embedding = np.pad(
-        #        acid_embedding,
-        #        ((0, self.pad - acid_embedding.shape[0]), (0, 0)),
-        #        mode="constant",
-        #        constant_values=0,
-        #    )
+            acid_embedding = np.pad(
+                acid_embedding,
+                ((0, self.pad - acid_embedding.shape[0]), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
+            chi_mask =np.pad(
+                chi_mask,
+                ((0, self.pad - chi_mask.shape[0]), (0, 0)),
+                mode="constant",
+                constant_values=0,
+            )
             seq = np.pad(
                 seq,
                 ((0, self.pad - seq.shape[0])),
@@ -868,7 +876,8 @@ class CathSideChainAnglesDataset(Dataset):
             if self.trim_strategy == "leftalign":
                 angles = angles[: self.pad]
                 coords = coords[: self.pad]
-            #    acid_embedding = acid_embedding[: self.pad]
+                acid_embedding = acid_embedding[: self.pad]
+                chi_mask = chi_mask[: self.pad]
                 seq = seq[: self.pad]
        #         print("*********************acid_embedding*******************",acid_embedding.shape)
       #          print("*********************seq*******************",seq.shape)
@@ -879,7 +888,8 @@ class CathSideChainAnglesDataset(Dataset):
                 assert end_idx < angles.shape[0]
                 angles = angles[start_idx:end_idx]
                 coords = coords[start_idx:end_idx]
-        #        acid_embedding = acid_embedding[start_idx:end_idx]
+                acid_embedding = acid_embedding[start_idx:end_idx]
+                chi_mask = chi_mask[start_idx:end_idx]
                 seq = seq[start_idx:end_idx]
                 assert angles.shape[0] == coords.shape[0] == self.pad
             else:
@@ -904,7 +914,8 @@ class CathSideChainAnglesDataset(Dataset):
         
         angles = torch.from_numpy(angles).float()
         coords = torch.from_numpy(coords).float()
-      #  acid_embedding = torch.from_numpy(acid_embedding).float()
+        acid_embedding = torch.from_numpy(acid_embedding).float()
+        chi_mask = torch.from_numpy(chi_mask).int()
         
         retval = {
             "angles": angles,
@@ -913,7 +924,8 @@ class CathSideChainAnglesDataset(Dataset):
             "lengths": torch.tensor(l, dtype=torch.int64),
             "coords": coords,
             "seq": seq,
-     #       "acid_embedding": acid_embedding,
+            "acid_embedding": acid_embedding,
+            "chi_mask": chi_mask,
         }
         return retval
 

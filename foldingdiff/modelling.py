@@ -39,6 +39,7 @@ from graph_transformer.struct2seq import Struct2Seq
 from graph_transformer.self_attention import *
 from graph_transformer.protein_features import *
 #end=====================yinglv====================================
+import tracemalloc
 
 LR_SCHEDULE = Optional[Literal["OneCycleLR", "LinearWarmup"]]
 TIME_ENCODING = Literal["gaussian_fourier", "sinusoidal"]
@@ -282,12 +283,12 @@ class BertForDiffusionBase(nn.Module):
 
         # Needed to project the low dimensional input to hidden dim
         
-        #self.m = nn.BatchNorm2d(num_features=128)
         self.inputs_to_hidden_dim = nn.Linear(
             in_features=n_inputs, out_features=config.hidden_size
         )
 
-    
+        self.seq_to_hidden_dim = nn.Linear(in_features=320, out_features=config.hidden_size)
+
         self.embeddings = BertEmbeddings(config)
    
         #start===================yinglv====================================
@@ -417,7 +418,7 @@ class BertForDiffusionBase(nn.Module):
         self,
         inputs: torch.Tensor,
         coords: torch.Tensor,
-      #  seq,
+        seq_embedding:torch.Tensor,
         timestep: torch.Tensor,  # Tensor of shape batch_length with time indices
         attention_mask: torch.Tensor,
         position_ids: Optional[torch.Tensor] = None,
@@ -512,6 +513,10 @@ class BertForDiffusionBase(nn.Module):
        # print('=========================orig=============================',inputs.shape)
        # print('=========================orig=============================',inputs)
         inputs_upscaled = self.inputs_to_hidden_dim(inputs)  # Batch * seq_len * dim
+        seq_embedding = self.seq_to_hidden_dim(seq_embedding)
+        inputs_upscaled =  inputs_upscaled+seq_embedding
+        
+        
         #+
         #print('=========================inputs_upscaled=============================',inputs_upscaled.shape)
         #inputs_upscaled = self.r1(inputs_upscaled)
@@ -632,11 +637,14 @@ class BertForDiffusion(BertForDiffusionBase, pl.LightningModule):
         predicted_noise = self.forward(
             batch["corrupted"],
             batch["coords"],
+            batch["acid_embedding"],
             batch["t"],
             attention_mask=batch["attn_mask"],
             position_ids=batch["position_ids"],
         )
-        #print('predicted noise=', predicted_noise.shape, predicted_noise)
+        predicted_noise = torch.mul(predicted_noise, batch['chi_mask'])
+        known_noise = torch.mul(known_noise, batch['chi_mask'])
+        print('predicted noise=', predicted_noise.shape)
         assert (
             known_noise.shape == predicted_noise.shape
         ), f"{known_noise.shape} != {predicted_noise.shape}"
@@ -795,6 +803,7 @@ class BertForDiffusion(BertForDiffusionBase, pl.LightningModule):
         return avg_loss
 
     def training_epoch_end(self, outputs) -> None:
+      #  tracemalloc.start()
         """Log the average training loss over the epoch"""
         losses = torch.stack([o["loss"] for o in outputs])
         mean_loss = torch.mean(losses)
@@ -812,6 +821,10 @@ class BertForDiffusion(BertForDiffusionBase, pl.LightningModule):
         # Increment counter and timers
         self.train_epoch_counter += 1
         self.train_epoch_last_time = time.time()
+       # snapshot = tracemalloc.take_snapshot()
+       # top_stats = snapshot.statistics('lineno')
+       # for stat in top_stats[:15]:
+       #     print(stat)
 
     def validation_step(self, batch, batch_idx) -> Dict[str, torch.Tensor]:
         """
@@ -1019,6 +1032,8 @@ class BertForAutoregressive(BertForAutoregressiveBase, pl.LightningModule):
         Get the loss terms for a batch
         """
         # Get the predictions
+       
+        
         preds = self.forward(
             batch["angles"],
             attention_mask=batch["causal_attn_mask"],
@@ -1031,6 +1046,7 @@ class BertForAutoregressive(BertForAutoregressiveBase, pl.LightningModule):
             preds[torch.arange(batch["lengths"].shape[0]), batch["causal_idx"]],
             batch["causal_target"],
         )
+       
         return l
 
     def training_step(self, batch, batch_idx):

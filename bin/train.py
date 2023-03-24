@@ -36,7 +36,7 @@ from foldingdiff import plotting
 from foldingdiff import utils
 from foldingdiff import custom_metrics as cm
 
-#srun -p bio_s1 -n 1 --ntasks-per-node=1  --mem=256G --cpus-per-task=128  python train.py /mnt/petrelfs/lvying/code/sidechain-diffusion/config_jsons/cath_full_angles_cosine.json --dryrun
+#srun -p bio_s1 -n 1 --ntasks-per-node=1 --cpus-per-task=40 --gres=gpu:8 python train.py /mnt/petrelfs/lvying/code/sidechain-diffusion/config_jsons/cath_full_angles_cosine.json --dryrun
 from pytorch_lightning.loggers import TensorBoardLogger
 
 assert torch.cuda.is_available(), "Requires CUDA to train"
@@ -367,6 +367,7 @@ def train(
         single_time_debug=single_timestep_debug,
     )
     # Record the masked means in the output directory
+    
     np.save(
         results_folder / "training_mean_offset.npy",
         dsets[0].dset.get_masked_means(),
@@ -388,7 +389,8 @@ def train(
             dataset=ds,
             batch_size=effective_batch_size,
             shuffle=i == 0,  # Shuffle only train loader
-            num_workers=multiprocessing.cpu_count() if multithread else 1,
+            #num_workers=multiprocessing.cpu_count() if multithread else 1,
+            num_workers= 0,
             pin_memory=True,
         )
         for i, ds in enumerate(dsets)
@@ -423,8 +425,7 @@ def train(
 
     sample_input = dsets[0][0]["corrupted"]  # First item of the training dset
     #sample_input1 = dsets[0]["corrupted"] 
-    t1 = dsets[0][0]["coords"] 
-    t2 = dsets[0][0]["seq"] 
+
     model_n_inputs = sample_input.shape[-1]
     logging.info(f"Auto detected {model_n_inputs} inputs")
 
@@ -437,7 +438,7 @@ def train(
         position_embedding_type=position_embedding_type,
         hidden_dropout_prob=dropout_p,
         attention_probs_dropout_prob=dropout_p,
-        use_cache=True,
+        use_cache=False,
     )
     # ft_is_angular from the clean datasets angularity definition
     ft_key = "coords" if angles_definitions == "cart-coords" else "angles"

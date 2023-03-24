@@ -25,7 +25,7 @@
     "max_epochs": 1000,
     "early_stop_patience": 0,
     "use_swa": false,
-    "batch_size": 2048,
+    "batch_size": 512,
     "multithread": true,
     "num_encoder_layers": 6
 }

@@ -3,6 +3,8 @@ import math
 import numpy as np
 import pandas as pd
 
+mapping_acid = {"A":0,"C":1,"D":2,"E":3,"F":4,"G":5,"H":6,"I":7,"K":8,"L":9,"M":10,"N":11,"P":12,"Q":13,"R":14,"S":15,"T":16,"V":17,"W":18,"Y":19 }
+
 ANGLES = ["X1", "X2", "X3","X4"]
 chi_angles_atoms = {
     "ALA": [],
@@ -74,8 +76,16 @@ restype_1to3 = {
 restype_3to1 = {v: k for k, v in restype_1to3.items()}
 bb_atoms = ['N', 'CA', 'C', 'O']
 
+def acid_to_number(seq, mapping):
+    num_list = []
+    for acid in seq:
+        if acid in mapping:
+            num_list.append(mapping[acid])
+    return num_list
+
 def get_torsion_seq(pdb_path):
     torsion_list = []
+    chi_mask =[]
     seq = []
     parser = PDB.PDBParser(QUIET=True)
     structure = parser.get_structure('name', pdb_path)
@@ -86,6 +96,7 @@ def get_torsion_seq(pdb_path):
     for res_idx, res in enumerate(chain):
 
         chi_list = [0] * 4
+        temp_mask =[0] * 4
         # Skip hetero atoms
         if res.id[0] != " ":
             continue
@@ -99,22 +110,28 @@ def get_torsion_seq(pdb_path):
             vec_atoms_coord = [res[a].get_vector() for a in torsion_atoms]
             angle = PDB.calc_dihedral(*vec_atoms_coord)
             chi_list[i] = angle
-
+            temp_mask[i] = 1
         torsion_list.append(chi_list)
-         
-        
+        chi_mask.append(temp_mask)
+    chi_mask = np.array(chi_mask)
     torsion_list = np.array(torsion_list)
     X = np.array(X)
     
     #=========
-    seq = np.array(seq, dtype=np.str)
+    seq_single = np.array(seq, dtype=np.str)
+    
+    num_acid_seq = acid_to_number(seq_single, mapping_acid)
+    num_acid_seq = np.array(num_acid_seq)
+    
     X1 = torsion_list[:,0]
     X2 = torsion_list[:,1]
     X3 = torsion_list[:,2]
     X4 = torsion_list[:,3]
     calc_angles = {"X1": X1, "X2": X2, "X3": X3, "X4": X4}
     angle_list = pd.DataFrame({k: calc_angles[k].squeeze() for k in ANGLES})
-    dict_struct = {'angles':angle_list,'coords': X, 'seq': seq, 'fname':pdb_path}
+    
+    
+    dict_struct = {'angles':angle_list,'coords': X, 'seq': num_acid_seq, "seq_temp":seq_single, "chi_mask": chi_mask, 'fname':pdb_path}
     return dict_struct
 
 #t = get_torsion_seq('./data/1CRN.pdb')
