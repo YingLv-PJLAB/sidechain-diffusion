@@ -268,7 +268,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--lengths",
         type=int,
         nargs=2,
-        default=[50, 128],
+        default=[127, 128],
         help="Range of lengths to sample from",
     )
     parser.add_argument(
@@ -367,7 +367,7 @@ def main() -> None:
     final_sampled = [s[-1] for s in sampled]
    # print("==============sampled================",final_sampled)
     print("==============sampled================",len(final_sampled))
-    '''
+    
     sampled_dfs = [
         pd.DataFrame(s, columns=train_dset.feature_names["angles"])
         for s in final_sampled
@@ -380,7 +380,7 @@ def main() -> None:
     logging.info(f"Writing sampled angles to {sampled_angles_folder}")
     for i, s in enumerate(sampled_dfs):
         s.to_csv(sampled_angles_folder / f"generated_{i}.csv.gz")
-    '''
+    
     # Write the sampled angles as pdb 
     outdir_pdb = outdir / "sampled_pdb"
     os.makedirs(outdir_pdb, exist_ok=True)

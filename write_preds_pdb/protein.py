@@ -75,8 +75,8 @@ def to_pdb(prot: Protein) -> str:
     # Add all atom sites.
     for i in range(n):
         res_name_3 = res_1to3(aatype[i])
-        for atom_name, pos, mask, b_factor in zip(
-                atom_types, atom_positions[i], atom_mask[i] #, b_factors[i]
+        for atom_name, pos, mask in zip(
+                atom_types, atom_positions[i], atom_mask[i] # 拿掉b_factor
         ):
             if mask < 0.5:  # 这个是用来干什么的 atom 被 mask掉就跳过
                 continue
@@ -86,6 +86,7 @@ def to_pdb(prot: Protein) -> str:
             alt_loc = ""
             insertion_code = ""
             occupancy = 1.00
+            b_factor = 100.00 # 这个b_factor是写死的
             element = atom_name[
                 0
             ]  # Protein supports only C, N, O, S, this works.

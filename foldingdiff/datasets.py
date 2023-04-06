@@ -541,11 +541,12 @@ class CathSideChainAnglesDataset(Dataset):
             logging.info(f"Loading toy dataset of {toy} structures")
             self.structures = self.__compute_featurization_sidechain(fnames)
         elif use_cache and os.path.exists(self.cache_fname):
-            print("=====================self.cache_fname=========",self.cache_fname)
+        #    print("=====================self.cache_fname=========",self.cache_fname)
             logging.info(f"Loading cached full dataset from {self.cache_fname}")
             with open(self.cache_fname, "rb") as source:
                 loaded_hash, loaded_structures = pickle.load(source)
-                codebase_matches_hash = loaded_hash == codebase_hash
+              #  codebase_matches_hash = loaded_hash == codebase_hash
+                codebase_matches_hash = True
                 if not codebase_matches_hash:
                     logging.warning(
                         "Mismatched hashes between codebase and cached values; updating cached values"
@@ -556,13 +557,13 @@ class CathSideChainAnglesDataset(Dataset):
         # We have not yet populated self.structures
         if self.structures is None:
             self.__clean_mismatched_caches()
-            print('===========================lvying=START======================')
+            print('===========================lvying Warping Data_START======================')
             self.structures = self.__compute_featurization_sidechain(fnames)
             if use_cache and not codebase_matches_hash:
                 logging.info(f"Saving full dataset to cache at {self.cache_fname}")
                 with open(self.cache_fname, "wb") as sink:
                     pickle.dump((codebase_hash, self.structures), sink)
-            print('===========================lvying=Finish======================')
+            print('===========================lvying Warpping Data_START Finish======================')
         # If specified, remove sequences shorter than min_length
         if self.min_length:
             orig_len = len(self.structures)
@@ -670,7 +671,7 @@ class CathSideChainAnglesDataset(Dataset):
         filename_hash = hash_md5.hexdigest()
 
         return os.path.join(
-            self.cache_dir, f"cache_canonical_structures_{k}_{filename_hash}.pkl"
+            self.cache_dir, f"esm3B_cache_canonical_structures_{k}_{filename_hash}.pkl"
         )
 
     def __clean_mismatched_caches(self) -> None:
@@ -699,7 +700,7 @@ class CathSideChainAnglesDataset(Dataset):
         structures = list(pool.map(get_torsion_seq,fnames, chunksize=250))
         pool.close()
         pool.join()
-        structures = add_esm1b_embedding(structures,128)
+        structures = add_esm1b_embedding(structures,64)
       #  with open("/mnt/petrelfs/lvying/code/sidechain-diffusion/foldingdiff/wrong_file") as f:
       #      worng_pdb = f.readlines()
            # print(worng_pdb)       
@@ -1054,7 +1055,7 @@ class AnglesEmptyDataset(Dataset):
         self.pad = pad
         self._mean_offset = mean_offset
         if self._mean_offset is not None:
-            print("=========n_offset.size===================",self._mean_offset.size)
+         #   print("=========n_offset.size===================",self._mean_offset.size)
             assert self._mean_offset.size == len(self.feature_names[k])
 
     @classmethod

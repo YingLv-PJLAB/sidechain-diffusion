@@ -3,7 +3,8 @@ Training script.
 
 Example usage: python ~/protdiff/bin/train.py ~/protdiff/config_jsons/full_run_canonical_angles_only_zero_centered_1000_timesteps_reduced_len.json
 """
-
+# squeue -p bio_s1
+# sbatch -p bio_s1 --ntasks-per-node=1 --cpus-per-task=40 --gres=gpu:8  lvying-sidechain-job.sh
 import os, sys
 import shutil
 import json
@@ -35,8 +36,10 @@ from foldingdiff import beta_schedules
 from foldingdiff import plotting
 from foldingdiff import utils
 from foldingdiff import custom_metrics as cm
-
+from torchsummary import summary
 #srun -p bio_s1 -n 1 --ntasks-per-node=1 --cpus-per-task=40 --gres=gpu:8 python train.py /mnt/petrelfs/lvying/code/sidechain-diffusion/config_jsons/cath_full_angles_cosine.json --dryrun
+#srun -p bio_s1 -n 1 --ntasks-per-node=1 --cpus-per-task=40 --gres=gpu:8 python train.py /mnt/petrelfs/lvying/code/sidechain-diffusion/config_jsons/cath_full_angles_cosine.json --dryrun  -o resutl_esm3b                        
+
 from pytorch_lightning.loggers import TensorBoardLogger
 
 assert torch.cuda.is_available(), "Requires CUDA to train"
@@ -484,7 +487,7 @@ def train(
     model_size = pl.utilities.memory.get_model_size_mb(model)
     print("model_size = {} M \n".format(model_size))
     # end=================================lvying================================
-
+    print("=================================LvYing Train Start================================")
     trainer = pl.Trainer(
         default_root_dir=results_folder,
         gradient_clip_val=gradient_clip,
@@ -505,7 +508,7 @@ def train(
         train_dataloaders=train_dataloader,
         val_dataloaders=valid_dataloader,
     )
-
+    print("=================================LvYing Train Finish================================")
     #Plot the losses
     #metrics_csv = os.path.join(
      #   trainer.logger.save_dir, "lightning_logs/version_0/metrics.csv"

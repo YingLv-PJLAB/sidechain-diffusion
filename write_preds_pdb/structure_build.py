@@ -5,14 +5,17 @@ from constant import (restype_rigid_group_default_frame,
                       restype_atom14_to_rigid_group,
                       restype_atom14_mask,
                       restype_atom14_rigid_group_positions,
-                      restype_atom14_to_atom37,
-                      restype_atom37_mask)
+                      restype_atom37_mask,
+                      make_atom14_37_list
+                      )
 import geometry
 import protein
+import os, sys
 
-def rotate_sidechain(aatype: torch.Tensor,
-                    restype_idx:torch.Tensor,
-                    angles: torch.Tensor) -> geometry.Rigid:
+def rotate_sidechain(
+                    restype_idx:torch.Tensor, # [*, N]
+                    angles: torch.Tensor # [*,N,4]
+                    ) -> geometry.Rigid:
 
     # [21, 8, 4, 4]
     default_frame = torch.tensor(restype_rigid_group_default_frame,
@@ -21,7 +24,8 @@ def rotate_sidechain(aatype: torch.Tensor,
                               requires_grad=False)
     # [*, N, 8, 4, 4]
     res_default_frame = default_frame[restype_idx, ...]
-
+    
+    print(" res_default_frame", res_default_frame.shape)
     # [*, N, 8] Rigid
     default_r = geometry.from_tensor_4x4(res_default_frame)
 
@@ -29,9 +33,12 @@ def rotate_sidechain(aatype: torch.Tensor,
     cos_angles = angles[..., 1]
 
     # [*,N,4] + [*,N,4] == [*,N,8]
-    sin_angles = torch.cat([torch.zeros(*aatype.shape, 4), sin_angles],dim=-1)
-    cos_angles = torch.cat([torch.ones(*aatype.shape, 4), cos_angles],dim=-1)
-
+    
+    sin_angles = torch.cat([torch.zeros(*restype_idx.shape, 4), sin_angles],dim=-1)
+    cos_angles = torch.cat([torch.ones(*restype_idx.shape, 4), cos_angles],dim=-1)
+    
+    print("sin_angles==",sin_angles.shape)
+    
     # [*, N, 8, 3, 3]
     # Produces rotation matrices of the form:
     # [
@@ -42,14 +49,20 @@ def rotate_sidechain(aatype: torch.Tensor,
     # This follows the original code rather than the supplement, which uses
     # different indices.
     all_rots = angles.new_zeros(default_r.rot.get_rot_mat().shape)
+    print("orign all_rots==",all_rots.shape)
     all_rots[..., 0, 0] = 1
     all_rots[..., 1, 1] = cos_angles
     all_rots[..., 1, 2] = -sin_angles
     all_rots[..., 2, 1] = sin_angles
     all_rots[..., 2, 2] = cos_angles
-
+    
+    print("all_rots==",all_rots.shape) # torch.Size([128, 8, 3, 3])
+    print('Rotation =========',geometry.Rotation(rot_mats = all_rots).shape)
     all_rots = geometry.Rigid(geometry.Rotation(rot_mats = all_rots), None)
-
+    
+    print("final all_rots==",all_rots.shape) #torch.Size([128])
+    
+    print("default_r==",default_r.shape) #torch.Size([128, 8])
     all_frames = geometry.Rigid_mult(default_r,all_rots)
 
     # Rigid
@@ -83,7 +96,7 @@ def frame_to_pos(frames, aatype_idx):
     group_mask = nn.functional.one_hot(group_mask, num_classes = frames.shape[-1])
 
     # [*, N, 14, 8] Rigid
-    map_atoms_to_global = frames[..., None, :] * group_mask
+    map_atoms_to_global = frames[..., None, :] * group_mask # [128,:,8,]
 
     map_atoms_to_global = geometry.map_rigid_fn(map_atoms_to_global)
 
@@ -108,22 +121,32 @@ def batch_gather(data,  # [N, 14, 3]
 
     N = data.shape[-3]
     r = torch.arange(N)
+    print("r1========",r.shape)
     r = r.view(-1,1)
+    print("r2========",r.shape)
     ranges.append(r)
-
+    print("r3========",r.shape)
     remaining_dims = [slice(None) for _ in range(2)]
+   # print("remaining_dims1========",remaining_dims.shape)
     remaining_dims[-2] = indexing
-
+   # print("remaining_dims2========",remaining_dims.shape)
     ranges.extend(remaining_dims)# [Tensor(N,1), Tensor(N,37), slice(None)]
+   # print("ranges========",ranges.shape)
     return data[ranges] # [N, 37, 3]
 
-def atom14_to_atom37(atom14, aa_idx):
-    residx_atom37_to_14 = restype_atom14_to_atom37[aa_idx]
+def atom14_to_atom37(atom14, aa_idx): # atom14: [*, N, 14, 3]
+    
+    residx_atom37_to_atom14 = make_atom14_37_list() #注意有错
+    
+    residx_atom37_to_14 = residx_atom37_to_atom14[aa_idx]
     # [N, 37]
     atom37_mask = restype_atom37_mask[aa_idx]
 
     # [N, 37, 3]
-    atom37 = batch_gather(atom14[-1], residx_atom37_to_14)
+    print('atom14===========', atom14.shape)
+    print('atom37_mask===========', atom37_mask.shape)
+    print('residx_atom37_to_14=====', residx_atom37_to_14.shape)
+    atom37 = batch_gather(atom14, residx_atom37_to_14)
     atom37 = atom37 * atom37_mask[...,None]
 
     return atom37
@@ -153,9 +176,9 @@ def torsion_to_position(aatype_idx: torch.Tensor, # [*, N]
             dim=-1,
         )
     sc_to_bb = rotate_sidechain(aatype_idx, angles_sin_cos)
-
+    print('sc_to_bb ==========================',sc_to_bb.shape)
     # [*, N] Rigid
-
+    print('backbone_position =================', backbone_position.shape)
     bb_to_gb = geometry.get_gb_trans(backbone_position)
 
     ''''
@@ -168,11 +191,13 @@ def torsion_to_position(aatype_idx: torch.Tensor, # [*, N]
     '''
 
     all_frames_to_global = geometry.Rigid_mult(bb_to_gb[..., None], sc_to_bb)
-
+    print('all_frames_to_global==============', all_frames_to_global.shape)
     # [*, N, 14, 3]
     all_pos = frame_to_pos(all_frames_to_global, aatype_idx)
-
+    print('all_pose=============', all_pos.shape)
     # [*, N, 37, 3]
+    print('aaidx type ===================== ',type(aatype_idx))
+    print('aaidx ===================== ',aatype_idx)
     final_pos = atom14_to_atom37(all_pos, aatype_idx)
 
     return final_pos
@@ -206,11 +231,26 @@ def torsion_to_position(aatype_idx: torch.Tensor, # [*, N]
 
 def write_preds_pdb_file(dataset, sampled_dfs, out_path):
     
+    temp_dict = list(dataset[0].keys())
+    print(temp_dict)
     final_atom_mask = restype_atom37_mask[dataset[0]["seq"]]
-    final_atom_positions = torsion_to_position(dataset[0]["seq"], 
-                                                     dataset[0]["coords"],
-                                                     sampled_dfs[0])
-    chain_len = len([0]["seq"])
+    print(" final_atom_mask=", final_atom_mask[0])
+    print(" final_atom_mask type", type(final_atom_mask))
+  #  print("sampled_dfs[0]",sampled_dfs[0])
+    print("sampled_dfs[0]",type(sampled_dfs[0]))
+
+    seq_list = torch.from_numpy(dataset[0]["seq"])
+    #print("dataset[0][coords]",type(dataset[0]["coords"]))
+    coord_list =  dataset[0]["coords"]
+    angle_list = torch.from_numpy(sampled_dfs[0])
+    print("seq_list==",seq_list.shape)
+    print("coord_list==",coord_list.shape)
+    print("angle_list==",angle_list.shape)
+    final_atom_positions = torsion_to_position(seq_list, 
+                                               coord_list,
+                                                angle_list)
+    
+    chain_len = len(seq_list)
     index = np.arange(1,chain_len+1)
     resulted_protein = protein.Protein(
                             aatype=dataset[0]["seq"], # [*,N]
@@ -220,6 +260,7 @@ def write_preds_pdb_file(dataset, sampled_dfs, out_path):
                             b_factors=np.zeros_like(final_atom_mask))
     
     pdb_str = protein.to_pdb(resulted_protein) 
-    with open(out_path+'generate_0', 'w') as fp:
+    
+    with open(os.path.join(out_path,"generate_0.pdb"), 'w') as fp:
          fp.write(pdb_str)
     

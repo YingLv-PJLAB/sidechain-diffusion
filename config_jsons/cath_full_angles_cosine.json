@@ -21,11 +21,11 @@
     "l1_norm": 0.0,
     "circle_reg": 0.0,
     "lr_scheduler": "LinearWarmup",
-    "min_epochs": 1000,
-    "max_epochs": 1000,
+    "min_epochs": 10000,
+    "max_epochs": 10000,
     "early_stop_patience": 0,
     "use_swa": false,
-    "batch_size": 512,
+    "batch_size": 128,
     "multithread": true,
     "num_encoder_layers": 6
 }

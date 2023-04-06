@@ -287,8 +287,10 @@ class BertForDiffusionBase(nn.Module):
             in_features=n_inputs, out_features=config.hidden_size
         )
 
-        self.seq_to_hidden_dim = nn.Linear(in_features=320, out_features=config.hidden_size)
-
+       # self.seq_to_hidden_dim = nn.Linear(in_features=320, out_features=config.hidden_size)
+        temp_dim = 320+config.hidden_size
+        self.to_hidden_dim = nn.Linear(in_features=temp_dim, out_features=config.hidden_size)
+        
         self.embeddings = BertEmbeddings(config)
    
         #start===================yinglv====================================
@@ -513,8 +515,12 @@ class BertForDiffusionBase(nn.Module):
        # print('=========================orig=============================',inputs.shape)
        # print('=========================orig=============================',inputs)
         inputs_upscaled = self.inputs_to_hidden_dim(inputs)  # Batch * seq_len * dim
-        seq_embedding = self.seq_to_hidden_dim(seq_embedding)
-        inputs_upscaled =  inputs_upscaled+seq_embedding
+      #  print('=========================inputs_upscaled=============================',inputs_upscaled.shape)
+      #  print('=========================seq_embedding=============================',seq_embedding.shape)
+        inputs_upscaled = torch.cat([inputs_upscaled,seq_embedding],dim=2)
+        inputs_upscaled = self.to_hidden_dim(inputs_upscaled)
+        #seq_embedding = self.seq_to_hidden_dim(seq_embedding)
+        #inputs_upscaled =  inputs_upscaled+seq_embedding
         
         
         #+
@@ -644,7 +650,7 @@ class BertForDiffusion(BertForDiffusionBase, pl.LightningModule):
         )
         predicted_noise = torch.mul(predicted_noise, batch['chi_mask'])
         known_noise = torch.mul(known_noise, batch['chi_mask'])
-        print('predicted noise=', predicted_noise.shape)
+       # print('predicted noise=', predicted_noise.shape)
         assert (
             known_noise.shape == predicted_noise.shape
         ), f"{known_noise.shape} != {predicted_noise.shape}"

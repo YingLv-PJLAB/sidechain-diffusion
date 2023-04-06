@@ -64,7 +64,7 @@ def p_sample(
     model_mean = sqrt_recip_alphas_t * (
         x
         - betas_t
-        * model(x,coords, acid_embedding, t, attention_mask=attn_mask)
+        * model(x, coords, acid_embedding, t, attention_mask=attn_mask)
         / sqrt_one_minus_alphas_cumprod_t
     )
 
@@ -140,7 +140,7 @@ def sample(
     train_dset: dsets.NoisedAnglesDataset,
     n: int = 10,
     sweep_lengths: Optional[Tuple[int, int]] = (50, 128),
-    batch_size: int = 512,
+    batch_size: int = 1,
     feature_key: str = "angles",
     disable_pbar: bool = False,
 ) -> List[np.ndarray]:
@@ -176,18 +176,22 @@ def sample(
     retval = []
     temp_c = train_dset[0]["coords"]
     temp_e = train_dset[0]["acid_embedding"]
+    print("=================train_dset.[0][coords]=================",train_dset[0]["coords"].shape)
+    print("=================train_dset.[0][acid_embedding]=================",train_dset[0]["acid_embedding"].shape)
    # coords = temp_c.repeat(512,1,1,1).cuda()
    # print("=================train_dset.[0][coords]=================",train_dset[0]["coords"].shape)
   #  print("=================coords=================",coords.shape)
+    print("=================lengths_chunkified=================",lengths_chunkified)
     for this_lengths in lengths_chunkified:
         batch = len(this_lengths)
         # Sample noise and sample the lengths
         coords = temp_c.repeat(batch,1,1,1).cuda()
-        acid_embedding = temp_e.repeat(batch,1,1,1).cuda()
+        acid_embedding = temp_e.repeat(batch,1,1).cuda()
         noise = train_dset.sample_noise(
             torch.zeros((batch, train_dset.pad, model.n_inputs), dtype=torch.float32)
         )
         # Produces (timesteps, batch_size, seq_len, n_ft)
+        this_lengths = [128, 128, 128, 128, 128, 128, 128, 128, 128, 128]
         sampled = p_sample_loop(
             model=model,
             coords = coords,

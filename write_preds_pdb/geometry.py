@@ -24,9 +24,29 @@ class Rotation:
 
         if self._rot_mats is not None:
             rot_mats = self._rot_mats[index + (slice(None), slice(None))]
+            print("rot_mats in =====",rot_mats.shape)
             return Rotation(rot_mats=rot_mats)
         else:
             raise ValueError("rotation are None")
+        
+    def __mul__(self,
+        right: torch.Tensor,
+    ) -> Rotation:
+        """
+            Pointwise left multiplication of the transformation with a tensor.
+            Can be used to e.g. mask the Rotation.
+
+            Args:
+                right:
+                    The tensor multiplicand
+            Returns:
+                The product
+        """
+        if not(isinstance(right, torch.Tensor)):
+            raise TypeError("The other multiplicand must be a Tensor")
+
+        new_rots = self._rot_mats * right.unsqueeze(-1).unsqueeze(-1) # [128,1,8,3,3] * [128, 14, 8] (3,3)
+        return Rotation(new_rots)
 
     def get_rot_mat(self) -> torch.Tensor:
         """
@@ -81,7 +101,7 @@ class Rigid:
                  trans: Optional[torch.Tensor],
                  ):
         if trans is None:
-            batch_dims = rots.shape[:-1]
+            batch_dims = rots.shape
             dtype = rots.get_rot_mat().dtype
             device = rots.get_rot_mat().device
             requires_grad = rots.get_rot_mat().requires_grad
@@ -124,6 +144,27 @@ class Rigid:
             index = (index,)
 
         return Rigid(self.rot[index], self.trans[index + (slice(None),)])
+    
+    def __mul__(self,
+        right: torch.Tensor,
+    ) -> Rigid:
+        """
+            Pointwise left multiplication of the transformation with a tensor.
+            Can be used to e.g. mask the Rigid.
+
+            Args:
+                right:
+                    The tensor multiplicand
+            Returns:
+                The product
+        """
+        if not(isinstance(right, torch.Tensor)):
+            raise TypeError("The other multiplicand must be a Tensor")
+
+        new_rots = self.rot * right
+        new_trans = self.trans * right[..., None]
+
+        return Rigid(new_rots, new_trans)
 
     def unsqueeze(self, dim: int) -> Rigid:
 
@@ -281,28 +322,32 @@ def map_rigid_fn(rigid: Rigid):
         lambda x: torch.sum(x, dim=-1), torch.unbind(rigid.trans, dim=-1)
     )), dim=-1)
 
-    return Rigid(Rotation(rot_mat=rot_mat), new_trans)
+    return Rigid(Rotation(rot_mats=rot_mat), new_trans)
 
-def get_gb_trans(bb_pos: torch.Tensor) -> Rigid:
+def get_gb_trans(bb_pos: torch.Tensor) -> Rigid: # [*,128,4,3]
 
     '''
     Get global transformation from given backbone position
     '''
-    ex = bb_pos[..., 2, :] - bb_pos[..., 1, :]
-    y_vec = bb_pos[..., 0, :] - bb_pos[..., 1, :]
-    t = bb_pos[..., 1, :]
-
+    ex = bb_pos[..., 2, :] - bb_pos[..., 1, :] # [*,128,3]
+    y_vec = bb_pos[..., 0, :] - bb_pos[..., 1, :] # [*,128,3]
+    t = bb_pos[..., 1, :] # [*,128,3]
+    
+    print("ex====",ex.shape)
+    print("y_vec====",y_vec.shape)
+    print("t====",t.shape)
+    print("torch.linalg.vector_norm(ex, dim=-1)", torch.linalg.vector_norm(ex, dim=-1).shape)
     # [*, N, 3]
-    ex_norm = ex / torch.linalg.vector_norm(ex, dim=-1)
-
+    ex_norm = ex / torch.linalg.vector_norm(ex, dim=-1).unsqueeze(-1)
+    print(ex_norm.shape)
     def dot(a, b):  # [*, N, 3]
         x1, y1, z1 = torch.unbind(b, dim=-1)
         x2, y2, z2 = torch.unbind(a, dim=-1)
 
         return x1 * x2 + y1 * y2 + z1 * z1
 
-    ey = y_vec - dot(y_vec, ex_norm) * ex_norm
-    ey_norm = ey / torch.linalg.norm(ey, dim=-1)
+    ey = y_vec - dot(y_vec, ex_norm).unsqueeze(-1) * ex_norm
+    ey_norm = ey / torch.linalg.norm(ey, dim=-1).unsqueeze(-1)
 
     ez_norm = torch.cross(ex_norm, ey_norm, dim=-1)
 
@@ -315,4 +360,4 @@ def get_gb_trans(bb_pos: torch.Tensor) -> Rigid:
     '''
 
     new_rot = torch.stack([ex_norm, ey_norm, ez_norm], dim=-1)
-    return Rigid(Rotation(rot_mat=new_rot), t)
+    return Rigid(Rotation(rot_mats=new_rot), t)

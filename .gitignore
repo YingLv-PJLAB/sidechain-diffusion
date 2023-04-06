@@ -8,10 +8,13 @@ test_sample_1/
 data/
 data-source/
 premodel/
+premodel/
 results
 *.pyc
 *.pkl
 plots/
 mini_model_for_testing/
-
-
+bin/results_2023-3-27/
+bin/results_2023-3-29/
+bin/resutl_esm3b/
+bin/test_sample/

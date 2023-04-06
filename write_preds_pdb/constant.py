@@ -1,4 +1,5 @@
 import numpy as np
+import torch
 
 restypes = ['A', 'R', 'N', 'D', 'C', 'Q', 'E', 'G', 'H', 'I', 'L', 'K', 'M', 'F', 'P',
             'S', 'T', 'W', 'Y', 'V']
@@ -391,8 +392,7 @@ restype_atom14_mask = np.zeros([21, 14], dtype=np.float32)
 restype_atom14_rigid_group_positions = np.zeros([21, 14, 3], dtype=np.float32)
 restype_rigid_group_default_frame = np.zeros([21, 8, 4, 4], dtype=np.float32)
 restype_atom37_mask = np.zeros([21, 37], dtype=np.float32)
-restype_atom14_to_atom37 = []
-restype_atom37_to_atom14 = []
+
 
 def make_rigid_trans(ex, y_vec, t):
     """Create rigid rotation and translation matrix with the given axis and translation vec
@@ -488,7 +488,10 @@ def _make_rigid_group_constants():
                     residx, 4 + chi_idx, :, :
                 ] = mat
 
-def _make_atom14_37_list():
+def make_atom14_37_list():
+    
+    restype_atom14_to_atom37 = []
+    restype_atom37_to_atom14 = []
 
     for rt in restypes:
         atom_names = restype_name_to_atom14_names[restype_1to3[rt]]
@@ -501,6 +504,13 @@ def _make_atom14_37_list():
             (atom_name_to_idx14[name] if name in atom_name_to_idx14 else 0)
             for name in atom_types
         ])
+        
+    restype_atom37_to_atom14 = np.array(restype_atom37_to_atom14)
+        
+    restype_atom37_to_atom14 = torch.tensor(restype_atom37_to_atom14)
+    
+    return restype_atom37_to_atom14
 
 _make_rigid_group_constants()
-_make_atom14_37_list()
+
+
